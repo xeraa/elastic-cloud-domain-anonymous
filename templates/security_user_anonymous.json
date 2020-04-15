@@ -1,0 +1,11 @@
+{
+  "username": "{{ anonymous_user }}",
+  "password": "{{ anonymous_password }}",
+  "roles": [
+    "anonymous_access"
+  ],
+  "full_name": "Anonymous User",
+  "email": "dashboard@xeraa.wtf",
+  "metadata": {},
+  "enabled": true
+}

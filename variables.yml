@@ -1,0 +1,16 @@
+# Elastic Cloud
+elasticsearch_host: "{{ lookup('env','ELASTICSEARCH_HOST') }}"
+elasticsearch_id: "{{ lookup('env','ELASTICSEARCH_ID') }}"
+elasticsearch_user: "{{ lookup('env','ELASTICSEARCH_USER') }}"
+elasticsearch_password: "{{ lookup('env','ELASTICSEARCH_PASSWORD') }}"
+kibana_host: "{{ lookup('env','KIBANA_HOST') }}"
+kibana_id: "{{ lookup('env','KIBANA_ID') }}"
+
+
+# Setup of the infrastructure
+domain: xeraa.wtf
+
+
+# Credentials for the anonymous Kibana user
+anonymous_user: admin
+anonymous_password: secret

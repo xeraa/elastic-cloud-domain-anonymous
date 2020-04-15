@@ -1,0 +1,98 @@
+- hosts: all
+  remote_user: ubuntu
+  become: true
+  gather_facts: yes
+
+
+  vars_files:
+    - variables.yml
+
+
+  vars:
+      kibana_basic_auth: "{{ anonymous_user }}:{{ anonymous_password  }}"
+
+
+  tasks:
+
+
+    # System
+    - name: Update and upgrade apt packages
+      apt: upgrade=full force_apt_get=yes update_cache=yes autoclean=yes autoremove=yes
+
+
+    # Elasticsearch
+    - name: Create a role for an anonymous user to only view data
+      uri:
+        url: "{{elasticsearch_host}}_security/role/anonymous_access"
+        body_format: json
+        method: PUT
+        user: "{{ elasticsearch_user }}"
+        password: "{{ elasticsearch_password }}"
+        force_basic_auth: true
+        body: "{{ lookup('file','security_role_anonymous.json') }}"
+        status_code:
+          - 201
+          - 200
+
+    - name: Create the anonymous user
+      uri:
+        url: "{{elasticsearch_host}}_security/user/{{ anonymous_user }}"
+        body_format: json
+        method: PUT
+        user: "{{ elasticsearch_user }}"
+        password: "{{ elasticsearch_password }}"
+        force_basic_auth: true
+        body: "{{ lookup('template','security_user_anonymous.json') }}"
+        status_code:
+          - 201
+          - 200
+
+
+    # nginx
+    - name: Install nginx
+      apt: name=nginx force_apt_get=yes
+
+    - name: Stop nginx so that Certbot can bind to port 80
+      service: name=nginx state=stopped
+
+    - name: Add the certbot repository
+      apt_repository: repo="ppa:certbot/certbot"
+
+    - name: Install certbot and update the cache for the new PPA
+      apt: name=python-certbot-nginx update_cache=yes force_apt_get=yes
+
+    - name: Add domains to the certificate
+      set_fact:
+        certificates:
+          - "{{ inventory_hostname }}"
+          - "elasticsearch.{{ domain }}"
+          - "kibana.{{ domain }}"
+          - "dashboard.{{ domain }}"
+
+    - name: Create the certificate
+      command: >
+        certbot certonly --non-interactive --standalone
+        --agree-tos --email admin@{{ domain }}
+        -d {{ certificates | join(',') }}
+        creates=/etc/letsencrypt/live/{{ inventory_hostname }}/fullchain.pem
+
+    - name: Add crontab to renew certificates every second month on Sunday night
+      cron:
+        name: Renew Let's Encrypt certificate
+        minute: "30"
+        hour: "3"
+        weekday: "0"
+        month: "*/2"
+        job: service nginx stop && certbot renew >> /var/log//var/log/letsencrypt/renew.log && service nginx start
+
+    - name: Generate strong dhparams, but only if the file doesn't exist
+      command: openssl dhparam -out /etc/ssl/certs/dhparam.pem 2048 creates=/etc/ssl/certs/dhparam.pem
+
+    - name: Set a global TLS configuration
+      template: src=templates/tls.conf dest=/etc/nginx/tls.conf
+
+    - name: Change the nginx configuration
+      template: src=templates/nginx.conf dest=/etc/nginx/sites-available/default
+
+    - name: Restart nginx and make sure it autostarts
+      service: name=nginx state=restarted enabled=yes
